@@ -1,0 +1,5 @@
+<?php
+define("CONFIG_DBHOST", 'FIXME');
+define("CONFIG_DBNAME", 'FIXME');
+define("CONFIG_DBUSER", 'FIXME');
+define("CONFIG_DBPASS", 'FIXME');
