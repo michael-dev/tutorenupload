@@ -1,6 +1,36 @@
 <?php
-
+// database
 define("CONFIG_DBHOST", 'FIXME');
 define("CONFIG_DBNAME", 'FIXME');
 define("CONFIG_DBUSER", 'FIXME');
 define("CONFIG_DBPASS", 'FIXME');
+
+// database tables
+define("TABSETTINGSNAME", 'tutorenupload__settings');
+define("TABDATANAME", 'tutorenupload__data');
+
+// database schemes
+define("TABSETTINGSSCHEME",
+	'`feature` VARCHAR(30) NOT NULL,
+	`value` VARCHAR(30),
+	PRIMARY KEY (`feature`)'
+);
+
+define("TABDATASCHEME",
+	'`id` INT NOT NULL auto_increment,
+	`tutorenjahr` INT NOT NULL,
+	`state` VARCHAR(10),
+	`faculty` VARCHAR(10),
+	`course` VARCHAR(10),
+	`name` VARCHAR(50),
+	`email` VARCHAR(60),
+	`uploaddatum` INT NOT NULL,
+	`bild` VARBINARY(150000),
+	PRIMARY KEY (`id`)'
+);
+
+// site settings
+define("CONFIG_ONLINE", true);
+
+// image settings
+define("CONFIG_MAXIMAGESIZE", 100000); // bytes
