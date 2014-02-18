@@ -16,12 +16,12 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-global $SIMPLESAML, $SIMPLESAMLAUTHSOURCE, $attributes, $logoutUrl;
+global $logoutUrl;
 
-$SIMPLESAML = dirname(dirname(dirname(__FILE__)))."/simplesamlphp";
-$SIMPLESAMLAUTHSOURCE = "wayfinder";
-$AUTHGROUP = "tutor,ag-erstiwoche,admin,konsul";
-$ADMINGROUP = "konsul,admin,ag-erstiwoche";
+$logoutUrl = "http://www.erstiwoche.de/";
+
+$AUTHGROUP = "tutor,ag-erstiwoche";
+$ADMINGROUP = "ag-erstiwoche";
 
 function getUserMail() {
   return "example@stura.tu-ilmenau.de";

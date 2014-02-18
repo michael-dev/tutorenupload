@@ -16,46 +16,59 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
+require_once("../config/config.php");
 require_once '../lib/EditImage.php';
-require_once '../lib/inc.simplesaml.php';
+
+if (CONFIG_ONLINE) require_once '../lib/inc.simplesaml.php';
+else require_once '../lib/inc.simplesaml.fake.php';
+// Zugriff prüfen mit Gruppenrecht "ag-erstiwoche"
 requireGroup($ADMINGROUP);
+
+define("TEMPFILE", 'archiv.zip');
 
 // nur auf einen POST-Request reagieren
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
-	$num = count($_POST["liste"]);
-	
-	if ($num  > 0) {
-		$ed = new EditImage();
-	
-		$zip = new ZipArchive;
+	if (isset($_POST["liste"])) {
+		$num = count($_POST["liste"]);
 		
-		// Erstelle neue Datei 'archiv.zip' auf dem Server
-		$res = $zip->open('archiv.zip', ZipArchive::CREATE);
-		if ($res === TRUE) {
-			for ($i = 0; $i<$num; $i++) {
-				$r = $ed->getPictureByID((int) $_POST["liste"][$i]);
-				if ($r["success"]) {
-					$zip->addFromString($i.'.png', $r["result"]);
+		if ($num  > 0) {
+			$ed = new EditImage();
+			$zip = new ZipArchive;
+			
+			// Erstelle neue Datei 'archiv.zip' auf dem Server
+			$res = $zip->open(TEMPFILE, ZipArchive::CREATE);
+			if ($res === TRUE) {
+				for ($i = 0; $i<$num; $i++) {
+					$r = $ed->getImageAsStringByID((int) $_POST["liste"][$i]);
+					
+					if ($r["success"]) {
+						$zip->addFromString($r["result"].".jpg", $r["image"]);
+					}
 				}
 			}
+			
+			$zip->close();
 		}
 		
-		$zip->close();
+		header('Content-Type: application/zip');
+		header('Content-Disposition: attachment; filename='.TEMPFILE);
+		
+		$contents = file_get_contents(TEMPFILE);
+		
+		// Lösche temporäre Datei wieder
+		unlink(TEMPFILE);
+		
+		$ed->saveSetting('lastDownload', time());
+		
+		echo $contents;
+		
+		# andere Variante:	
+		# require_once("../lib/Zip.php");
+		# $zip = new ZipStream("dateiname.zip");
+		# $zip->addFile("binäre bilddate","bild123.jpeg");
+		# $zip->finalize();
+	} else {
+		header('Content-Type: text/html; charset=utf-8');
+		echo "Fehler! Keine Auswahl von Bildern getroffen.";
 	}
-	
-	header("Content-Type: application/zip");
-	header('Content-Disposition: attachment; filename="archiv.zip"');
-	header("Content-Length: " . filesize('archiv.zip'));
-	
-	$contents = file_get_contents('archiv.zip');
-	// Lösche Datei 'archiv.zip' wieder
-	unlink('archiv.zip');
-	
-	echo $contents;
 }
-
-# require_once("../lib/Zip.php");
-# $zip = new ZipStream("dateiname.zip");
-# $zip->addFile("binäre bilddate","bild123.png");
-# $zip->finalize();
-

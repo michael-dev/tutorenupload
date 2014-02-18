@@ -16,32 +16,34 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
+require_once("../config/config.php");
 require_once '../lib/EditImage.php';
-require_once '../lib/inc.simplesaml.php';
 
+if (CONFIG_ONLINE) require_once '../lib/inc.simplesaml.php';
+else require_once '../lib/inc.simplesaml.fake.php';
+// Zugriff prüfen mit Gruppenrecht "ag-erstiwoche"
 requireGroup($ADMINGROUP);
-$id = (int) $_GET["id"];
 
-$ed = new EditImage();
+if (isset($_GET["id"])) {
 
-$r = $ed->getPictureByID($id);
+	$id = (int) $_GET["id"];
 
-/* andere Variante
+	$ed = new EditImage();
 
-$im = imagecreatefromstring($data);
-if ($im !== false) {
-    imagepng($im);
-    imagedestroy($im);
-}
-*/
+	$r = $ed->getImageAsStringByID($id);
 
-header("Content-Type: image/png");
-header('Content-Length: '.strlen($r["result"]));
-header('Content-Disposition: inline; filename="bild.png"');
-header('Content-Transfer-Encoding: binary');
+	if ($r["success"]) {
+		header('Content-Type: image/jpeg');
+		header('Content-Length: '.strlen($r["image"]));
+		header('Content-Disposition: inline; filename="'.$id.'.jpg"');
+		header('Content-Transfer-Encoding: binary');
 
-if ($r["success"]) {
-	echo $r["result"];
+		echo $r["image"];
+	} else {
+		header('Content-Type: text/html; charset=utf-8');
+		echo $r["error"];
+	}
 } else {
-	echo "An error occurred.";
+	header('Content-Type: text/html; charset=utf-8');
+	echo "Fehler! Nötiger Parameter nicht vorhanden.";
 }

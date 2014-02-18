@@ -17,145 +17,154 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-/*
- * To use this class, enable the pdo-database driver in the 'php.ini'.
- * To do this, comment out the line 'extension=php_pdo_mysql.dll' in 'php.ini' for a mysql database.
- */
-
 require_once("../config/config.php");
-
+ 
+// To use this class, enable the pdo-database driver on the server in file 'php.ini'.
+// To do this, comment out the line 'extension=php_pdo_mysql.dll' in 'php.ini' for a mysql database.
 class EditImage {
-    // maximale Größe eines Bildes
-    // VORSICHT: BEI ÄNDERUNG DES ZAHLENWERTS MUSS DAS DB-SCHEMA (WEITER UNTEN) ANGEPASST WERDEN!
-    const MAXIMAGESIZE = 100000; // bytes
-
     // Abmaße der neuen Bilder in Pixel
     const WIDTH = 75;
     const HEIGHT = 100;
 
-    // Tabellen der Datenbank
-    const TABSETTINGSNAME = 'tutorenupload__settings';
-    const TABSETTINGSSCHEME =
-        '`feature` VARCHAR(30) NOT NULL,
-        `value` BOOLEAN,
-        PRIMARY KEY (`feature`)';
-
-    const TABDATANAME = 'tutorenupload__data';
-    const TABDATASCHEME =
-        '`id` INT NOT NULL auto_increment,
-        `tutorenjahr` INT NOT NULL,
-        `vorname` VARCHAR(30),
-        `nachname` VARCHAR(30),
-        `uploaddatum` DATETIME,
-        `bild` VARBINARY(100000),
-        PRIMARY KEY (`id`)';
-
     private $database;
 
+	private $settings = array();
+	
     function __construct() {
-        $this->database = self::getDB();
-        $this->initalizeDB();
-    }
-
-    private function getDB() {
-        try {
-            return new PDO('mysql:host='.CONFIG_DBHOST.';dbname='.CONFIG_DBNAME, CONFIG_DBUSER, CONFIG_DBPASS);
+		// Einstellungen definieren
+		array_push(
+			$this->settings,
+			array("name" => "showPicture",   "initialValue" => 0),
+			array("name" => "state",         "initialValue" => "ba"),
+			array("name" => "lastDownload",  "initialValue" => 0),
+			array("name" => "active",        "initialValue" => 0)
+		);
+		
+		try {
+            $this->database = new PDO('mysql:host='.CONFIG_DBHOST.';dbname='.CONFIG_DBNAME, CONFIG_DBUSER, CONFIG_DBPASS);
+			$this->initalizeDB();
         } catch (PDOException $e) {
-            die("<br/><br/>Error! " . $e->getMessage() . "<br/><br/>");
+            die("<br/><br/>Error! ".$e->getMessage()."<br/><br/>");
         }
     }
-
+	
     function __destruct() {
         $this->database = null;
     }
 
-    // ADMIN.PHP
+	private function returnValue($succ = false, $pictureData = NULL, $res = NULL, $err = "Unknown error occurred.") {
+		return array(
+			"success" => $succ,
+			"image"   => $pictureData,
+			"result"  => $res,
+			"error"   => $err
+		);
+	}
+	
     public function initalizeDB() {
-        $r = $this->database->query("SELECT COUNT(*) FROM ".self::TABSETTINGSNAME);
-        if ($r === false) {
-          if (!self::createNewTable(self::TABSETTINGSNAME, self::TABSETTINGSSCHEME)) {
-            die("<br/><br/>Error! Die Tabelle '".self::TABSETTINGSNAME."' konnte nicht in der Datenbank erstellt werden!<br/><br/>");
-          }
-        }
+		self::checkIfTableExistsAndCreateIfNot(TABSETTINGSNAME, TABSETTINGSSCHEME);
+		self::checkSettingsAndPossibleCreateThem();
+        self::checkIfTableExistsAndCreateIfNot(TABDATANAME, TABDATASCHEME);
+    }
 
-        $stmt = $this->database->prepare("SELECT * FROM ".self::TABSETTINGSNAME." WHERE feature = ?;");
-        $stmt->execute(Array('active')) or die("error query settings");
-        if (count($stmt->fetchAll()) < 1) {
-          if (!self::createNewSetting('active', 0)) {
-            die("<br/><br/>Error! Einstellung 'active' konnte nicht in der Tabelle '".self::TABSETTINGSNAME."' erstellt werden!<br/><br/>");
-          }
-        }
-
-        $stmt->execute(Array('showPicture')) or die("error query settings");
-        if (count($stmt->fetchAll()) < 1) {
-          if (!self::createNewSetting('showPicture', 0)) {
-            die("<br/><br/>Error! Einstellung 'showPicture' konnte nicht in der Tabelle '".self::TABSETTINGSNAME."' erstellt werden!<br/><br/>");
-          }
-        }
-
-        $r = $this->database->query("SELECT COUNT(*) FROM ".self::TABDATANAME);
-        if ($r === false) {
-          if (!self::createNewTable(self::TABDATANAME, self::TABDATASCHEME)) {
-            die("<br/><br/>Error! Die Tabelle '".self::TABDATANAME."' konnte nicht in der Datenbank erstellt werden!<br/><br/>");
-          }
+    private function checkIfTableExistsAndCreateIfNot($name, $schema) {
+		// Nachschauen, ob Tabelle vorhanden
+		$success = $this->database->query("SELECT COUNT(*) FROM ".$name);
+		
+		if ($success === false) {
+			// Erstelle Tabelle
+			$stmt = $this->database->prepare("CREATE TABLE `".$name."` (".$schema.")");
+			$r = $stmt->execute();
+			
+			if ($r === false) {
+				// Falls Tabelle nicht erstellt werden kann, gib Fehler aus
+				var_dump($stmt->errorInfo());
+				die("<br/><br/>FEHLER! Die Tabelle '".$name."' konnte nicht in der Datenbank erstellt werden!<br/><br/>");
+			}
         }
     }
 
-    private function createNewTable($name, $schema) {
-        $stmt = $this->database->prepare("CREATE TABLE `".$name."` (".$schema.")");
-        $r = $stmt->execute();
-        if ($r === false) var_dump($stmt->errorInfo());
-        return $r;
-    }
-
-    private function createNewSetting($name, $value) {
-        $stmt = $this->database->prepare("INSERT INTO `".self::TABSETTINGSNAME."` (feature, value) VALUES (?,?);");
-        $r = $stmt->execute(Array($name, $value));
-        if ($r === false) var_dump($stmt->errorInfo());
-        return $r;
+	private function checkSettingsAndPossibleCreateThem() {
+		foreach ($this->settings as $e) {
+			$stmt = $this->database->prepare("SELECT * FROM ".TABSETTINGSNAME." WHERE feature = ?");
+			$success = $stmt->execute(array($e["name"]));
+			
+			if (count($stmt->fetchAll()) < 1) {
+				// wenn nicht, erstelle und intialisiere sie
+				$stmt = $this->database->prepare("INSERT INTO `".TABSETTINGSNAME."` (feature, value) VALUES (?,?)");
+				$r = $stmt->execute(array($e["name"], $e["initialValue"]));
+					
+				if ($r === false) {
+					// Falls Eigenschaft nicht erstellt werden kann, gib Fehler aus und brich ab
+					var_dump($stmt->errorInfo());
+					die("<br/><br/>Fehler! Einstellung '".$e["name"]."' konnte nicht in der Tabelle '".TABSETTINGSNAME."' erstellt werden!<br/><br/>");
+				}
+			}
+		}
     }
 
     public function saveSetting($name, $value) {
-        switch ($name) {
-            case 'active':
-            case 'showPicture':
-                $stmt = $this->database->prepare("UPDATE ".self::TABSETTINGSNAME." SET value = ".$value." WHERE feature = '".$name."'");
-                $stmt->execute();
-                break;
-
-            default:
-                // Fehlermeldung
+		$settingNameIsValid = false;
+		foreach ($this->settings as $e) {
+			if ($e["name"] == $name) {
+				$settingNameIsValid = true;
+				break;
+			}
+		}
+		
+		if ($settingNameIsValid) {
+			$stmt = $this->database->prepare("UPDATE ".TABSETTINGSNAME." SET value = '".$value."' WHERE feature = '".$name."'");
+			$stmt->execute();
         }
     }
 
-    public function getSetting($settingName) {
-        switch ($settingName) {
-            case 'active':
-            case 'showPicture':
-                $stmt = $this->database->prepare("SELECT value FROM ".self::TABSETTINGSNAME." WHERE feature = '".$settingName."'");
-                $stmt->execute();
-                return $stmt->fetchColumn();
-
-            default:
-                return NULL;
+    public function getSetting($name) {
+		$settingNameIsValid = false;
+		foreach ($this->settings as $e) {
+			if ($e["name"] == $name) $settingNameIsValid = true;
+		}
+		
+		if ($settingNameIsValid) {
+			$stmt = $this->database->prepare("SELECT value FROM ".TABSETTINGSNAME." WHERE feature = '".$name."'");
+			$stmt->execute();
+			return $stmt->fetchColumn();
         }
     }
 
-    public function getListOfUploadedImages() {
-        $stmt = $this->database->prepare("SELECT id, tutorenjahr, vorname, nachname, uploaddatum FROM ".self::TABDATANAME." ORDER BY uploaddatum DESC");
-
-        return array(
-            "success" => $stmt->execute(),
-            "result" => $stmt->fetchAll()
-        );
+	// ADMIN.PHP
+	public function getListOfUploadedImagesAtYearAndState($year) {
+        $stmt = $this->database->prepare("SELECT id, faculty, course, name, email, uploaddatum FROM ".TABDATANAME." WHERE tutorenjahr = ".$year." AND state = '".$this->getSetting('state')."' ORDER BY uploaddatum DESC");
+		$succ = $stmt->execute();
+		$data = $stmt->fetchAll();
+		
+		// Escapes aus $data entfernen
+		for ($i=0; $i<count($data); $i++) {
+			$data[$i]["name"] = str_replace("'", "", $data[$i]["name"]);
+			$data[$i]["email"] = str_replace("'", "", $data[$i]["email"]);
+		}
+		
+        return $this->returnValue($succ, NULL, $data, "");
     }
+	
+	
+	public function getUploadedYears() {
+		$stmt = $this->database->prepare("SELECT DISTINCT tutorenjahr FROM `tutorenupload__data` ORDER BY tutorenjahr DESC");
+		$succ = $stmt->execute();
+		$data = $stmt->fetchAll();
+		
+		return $this->returnValue($succ, NULL, $data, "Fehler beim Abrufen der Jahre.");
+	}
 
     // INDEX.PHP
-    public function resizeAndUpload($firstname, $lastname, $filename) {
+    public function resizeAndUpload($faculty, $course, $name, $mail, $filename) {
         $imageMetaData = getimagesize($filename);
 
+		$width = $imageMetaData[0];
+        $height = $imageMetaData[1];
+		$type = $imageMetaData[2];
+		
         $source;
-        switch($imageMetaData[2]) {
+        switch($type) {
             case IMAGETYPE_GIF:
                 $source = imagecreatefromgif($filename);
                 break;
@@ -169,74 +178,83 @@ class EditImage {
                 break;
 
             default:
-                return array(
-                    "success" => false,
-                    "result" => "Dateiformat wird nicht untersützt!",
-                    "image" => NULL
-                );
+                return $this->returnValue(false, NULL, NULL, "Dateiformat wird nicht untersützt!");
         }
-
-        $width = $imageMetaData[0];
-        $height = $imageMetaData[1];
 
         $thumb = imagecreatetruecolor(self::WIDTH, self::HEIGHT);
         imagealphablending($thumb, false);
         imagecopyresized($thumb, $source, 0, 0, 0, 0, self::WIDTH, self::HEIGHT, $width, $height);
 
-        // Ausgabe puffern (den rohen Datenstrom in die Variable $contents schreiben statt ihn auszugeben)
+        // Ausgabe puffern, d.h. den rohen Datenstrom in die Variable $contents schreiben statt ihn auszugeben
         ob_start();
-        imagepng($thumb);
+        imagejpeg($thumb);
         $contents =  ob_get_contents();
         ob_end_clean();
 
         if ($contents !== false) {
-            return self::saveImage($firstname, $lastname, $contents);
+            return $this->saveImage($faculty, $course, $name, $mail, $contents);
         } else {
-            return array(
-                "success" => false,
-                "result" => NULL,
-                "image" => NULL
-            );
+            return $this->returnValue();
         }
     }
 
-    private function saveImage($vorname, $nachname, $data) {
-        $stmt = $this->database->prepare("INSERT INTO ".self::TABDATANAME." (tutorenjahr, vorname, nachname, uploaddatum, bild) VALUES (NOW(), ?, ?, NOW(), ?)");
+    private function saveImage($faculty, $course, $name, $email, $data) {
+		// schaue nach, ob es bereits schon ein Eintrag derjenigen Person im aktuellen Jahr gibt
+		$stmt = $this->database->prepare("SELECT id FROM ".TABDATANAME." WHERE email = '\\'".$email."\'' AND tutorenjahr = ".date("Y")." AND state = '".$this->getSetting('state')."'");
+		$stmt->execute();
+		$ret = $stmt->fetchAll();
+		
+		if (count($ret) > 1) {
+			// Fehler, da eine ID mehrmals vorhanden :-(
+			return $this->returnValue();
+		} elseif (count($ret) == 1) {
+			$stmt = $this->database->prepare("UPDATE ".TABDATANAME." SET faculty = ?, course = ?, uploaddatum = ?, bild = ? WHERE id = ".$ret[0]["id"]);
+			$stmt->bindParam(1, $faculty);
+			$stmt->bindParam(2, $course);
+			$stmt->bindParam(3, time());
+			$stmt->bindParam(4, $data);
+		} else {		
+			$stmt = $this->database->prepare("INSERT INTO ".TABDATANAME." (tutorenjahr, state, faculty, course, name, email, uploaddatum, bild) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+			$stmt->bindParam(1, date("Y"));
+			$stmt->bindParam(2, $this->getSetting('state'));
+			$stmt->bindParam(3, $faculty);
+			$stmt->bindParam(4, $course);
+			$stmt->bindParam(5, $this->database->quote($name));
+			$stmt->bindParam(6, $this->database->quote($email));
+			$stmt->bindParam(7, time());
+			$stmt->bindParam(8, $data);
+		}
+		
+		$succ = $stmt->execute();
 
-        $stmt->bindParam(1, $this->database->quote($vorname));
-        $stmt->bindParam(2, $this->database->quote($nachname));
-        // $stmt->bindParam(3, base64_encode($data));
-        $stmt->bindParam(3, $data);
-
-        $succ = $stmt->execute();
-
-        return array(
-            "success" => $succ,
-            "result" => $this->database->lastInsertId(),
-            "image" => $data
-        );
+		if ($succ) {
+			return $this->returnValue(true, $data, $this->database->lastInsertId(), "");
+		} else {
+			return $this->returnValue(false, NULL, NULL, "Bild konnte nicht gespeichert werden.");
+		}
     }
 
-    // BILD.PHP
-    // ARCHIV.PHP
-    public function getPictureByID($id) {
-        $stmt = $this->database->prepare("SELECT bild FROM ".self::TABDATANAME." WHERE id = ".$id);
+    // BILD.PHP, ARCHIV.PHP
+    public function getImageAsStringByID($id) {
+        $stmt = $this->database->prepare("SELECT faculty, course, name, bild FROM ".TABDATANAME." WHERE id = ".$id);
 
         $succ = $stmt->execute();
-        $val = $stmt->fetchColumn();
+        $val = $stmt->fetch();
 
+		$name = str_replace("'", "", $val["name"]);
+		$name = strtolower($name);
+		$name = str_replace(" ", "-", $name);
+		if ($this->getSetting('state') == "ba") {
+			$name = $val["course"]."-".$name;
+		}
+		$name = self::getSetting('state')."-".$val["faculty"]."-".$name;
+		
+		$bild = $val["bild"];
+		
         if ($val !== false) {
-            // $val = base64_decode($val);
-            return array(
-                "success" => $succ,
-                "result" => $val
-            );
+			return $this->returnValue(true, $bild, $name, "");
         } else {
-            return array(
-                "success" => false,
-                "result" => NULL
-            );
+            return $this->returnValue(false, NULL, NULL, "Fehler! Keine solche ID vorhanden.");
         }
     }
 }
-

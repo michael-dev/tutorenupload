@@ -16,12 +16,14 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-// Zugriff prüfen
-// Gruppenrecht: ewo-<Jahr>
-
 header('Content-Type: text/html; charset=utf-8');
+require_once("../config/config.php");
 require_once '../lib/EditImage.php';
-require_once '../lib/inc.simplesaml.php';
+
+if (CONFIG_ONLINE) require_once '../lib/inc.simplesaml.php';
+else require_once '../lib/inc.simplesaml.fake.php';
+
+// Zugriff prüfen mit Gruppenrecht "ag-erstiwoche"
 requireGroup($ADMINGROUP);
 ?>
 
@@ -41,7 +43,20 @@ requireGroup($ADMINGROUP);
 .warning {
     color: red;
 }
+
+tr.new td {
+	background: #F7819F;
+}
 </style>
+
+<script type="text/javascript">
+function handleCheckboxClick($box) {
+	var checkBoxGroup = document.getElementsByName("liste[]");
+	for (var i=0; i<checkBoxGroup.length; i++) {
+		checkBoxGroup[i].checked = $box.checked;
+	}
+}
+</script>
 
 </head>
 
@@ -53,49 +68,81 @@ requireGroup($ADMINGROUP);
 
 <h1>Bildupload für Tutoren - Adminbereich</h1>
 
-<h3>Upload-Einstellungen</h3>
+<p>Hallo, <?php echo getFullName(); ?>!
+Hier kannst du den Upload einstellen und die hochgeladenen Bilder wieder downloaden.
+Bitte logge dich unten nach dem Herunterladen wieder aus!</p>
 
 <?php
 $ed = new EditImage();
-$active;
-$showPicture;
+
+$active = $ed->getSetting('active');
+$showPicture = $ed->getSetting('showPicture');
+$state = $ed->getSetting('state');
+$selectedYear;
+$changed = false;
+
+if ($_SERVER['REQUEST_METHOD'] == 'GET') {
+	$selectedYear = date('Y');
+}
 
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
-	$message = '<p class="warning">Folgende Einstellung(en) wurden gespeichert:</p><p class="warning">';
-	$changed = false;
-	$old = $ed->getSetting('active');
-	$active = isset($_POST['activeCheckbox']);
-	if ($old != $active) {
-		if ($active) {
-			$ed->saveSetting('active', 1);
-		} else {
-			$ed->saveSetting('active', 0);
-		}
-		$message = $message.'Upload aktiviert?';
-		$changed = true;
-	}
-	
-	$old = $ed->getSetting('showPicture');
-	$showPicture = isset($_POST['showPictureCheckbox']);
-	if ($old != $showPicture) {
-		if ($showPicture) {
-			$ed->saveSetting('showPicture', 1);
-		} else {
-			$ed->saveSetting('showPicture', 0);
-		}
-		$message = $message.', Zeige unten Bilder?';
-		$changed = true;
-	}
-	$message = $message.'</p>';
-	
-	if ($changed) echo $message;
-} else {
-	$active = $ed->getSetting('active');
-	$showPicture = $ed->getSetting('showPicture');
+	switch (true) {
+		case isset($_POST['settingsSend']):
+			$message = '<p class="warning">Folgende Einstellung(en) wurden gespeichert: ';
+
+			$old = $ed->getSetting('active');
+			$active = isset($_POST['settingActiveCheckbox']);
+			if ($old != $active) {
+				if ($active) {
+					$ed->saveSetting('active', 1);
+				} else {
+					$ed->saveSetting('active', 0);
+				}
+				$message = $message.'Upload aktiviert?';
+				$changed = true;
+			}
+			
+			$old = $ed->getSetting('showPicture');
+			$showPicture = isset($_POST['settingShowPictureCheckbox']);
+			if ($old != $showPicture) {
+				if ($showPicture) {
+					$ed->saveSetting('showPicture', 1);
+				} else {
+					$ed->saveSetting('showPicture', 0);
+				}
+				$message = $message.', Zeige unten Bilder?';
+				$changed = true;
+			}
+			
+			$old = $ed->getSetting('state');
+			$state = $_POST['selectState'];
+			if ($old != $state) {
+				$ed->saveSetting('state', $state);
+				$message = $message.', Upload für';
+				$changed = true;
+			}
+
+			$message = $message.'</p>';
+			
+			$selectedYear = (int) $_POST['selectedYear'];
+			break;
+			
+		case isset($_POST['selectYearSend']):
+			$selectedYear = (int) $_POST['selectYear'];
+			break;
+			
+		default:
+			exit;
+	}	
 }
 ?>
 
-<form action="admin.php" method="post">
+<h3>Upload-Einstellungen</h3>
+
+<?php if ($changed) echo $message; ?>
+
+<form name="SettingsForm" action="admin.php" method="post">
+	
     <table class="tabelle" width="400px" style="border-collapse: collapse; border: solid black 1px;">
 	<tr>
 	    <td width="200px"><b>Einstellung</b></td>
@@ -103,58 +150,101 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 	</tr>
         <tr>
 	    <td>Upload aktiviert?</td>
-	    <td><input type="checkbox" name="activeCheckbox" value="Liste ist aktiviert." <?php echo $active ? 'checked="checked"' : ''; ?> /></td>
+	    <td><input type="checkbox" name="settingActiveCheckbox" value="Liste ist aktiviert." <?php echo $active ? 'checked="checked"' : ''; ?> /></td>
         </tr>
         <tr>
 	    <td>Zeige unten Bilder?</td>
-	    <td><input type="checkbox" name="showPictureCheckbox" value="Bilder werden angezeigt." <?php echo $showPicture ? 'checked="checked"' : ''; ?> /></td>
+	    <td><input type="checkbox" name="settingShowPictureCheckbox" value="Bilder werden angezeigt." <?php echo $showPicture ? 'checked="checked"' : ''; ?> /></td>
+        </tr>
+		<tr>
+	    <td>Upload für</td>
+	    <td>
+			<select name="selectState">
+				<option value="ba" <?php if ($state == "ba") echo "selected"; ?>>ErstiWoche</option>
+				<option value="ma" <?php if ($state == "ma") echo "selected"; ?>>Mastereinführungstage</option>
+			</select>
+		</td>
+        </tr>
+		<tr>
+	    <td>letzter Bilddownload</td>
+	    <td><?php $t = $ed->getSetting('lastDownload'); echo ($t == 0) ? "noch keiner" : "am ".date('d.m.Y', $t)."<br />um ".date('G:i:s', $t)." Uhr"; ?></td>
         </tr>
         <tr>
-	    <td colspan="2"><input type="submit" name="savesettings" value="Einstellungen speichern" /></td>
+	    <td colspan="2"><input type="submit" name="saveSettings" value="Einstellungen speichern" /></td>
         </tr>
     </table>
+	
+	<input type="hidden" name="selectedYear" value="<?php echo $selectedYear; ?>">
+	<input type="hidden" name="settingsSend" value="">
 </form>
 
 <h3>Bisher hochgeladene Bilder</h3>
 
-<p>Hier stíehst du alle Bilder, die die Tutoren bisher im Jahr <?php echo date("Y"); ?> hochgeladen haben.
-Über den Button unten kannst du alle mit einem Häckchen ausgewählten Bilder in einem ZIP-Archiv herunterladen.</p>
+<p>Hier stíehst du alle Bilder, die die Tutoren im unten ausgewählten Jahr hochgeladen haben.
+Die Anzeige ist ebenso davon abhängig, was bei "Upload für" eingestellt wurde.
+Über den Button unten kannst du alle mit einem Häckchen ausgewählten Bilder in einem ZIP-Archiv herunterladen.
+Alle rot markierten Zeilen sind neue Bilder, die seit dem letzten Download hinzugekommen sind.</p>
 
-<form action="archiv.php" method="post">
+<form name="SelectYearForm" action="admin.php" method="post">
+	<p>Jahr&nbsp;&nbsp;&nbsp;
+		<select name="selectYear" onchange="this.form.submit()">
+		<?php
+		$r = $ed->getUploadedYears();
+		// falls keine Daten vorhanden sind, zeige zumindest das aktuelle Jahr
+		$r["result"] = $r["result"] + array(array("tutorenjahr" => date('Y')));
+		
+		foreach($r["result"] as $line) {
+			$y = (int) $line["tutorenjahr"];
+		?>
+			<option <?php if ($selectedYear == $y) echo 'selected'; ?>><?php echo $y; ?></option>
+		<?php
+		}
+		?>
+		</select>
+	</p>
+	
+	<input type="hidden" name="selectYearSend" value="">
+</form>
+
+<form name="ShowUploadsForm" action="archiv.php" method="post">
 <table class="tabelle" width="700px" style="border-collapse: collapse; border: solid black 1px;">
     <tr>
-	<td><input type="checkbox" name="selectCheckbox" value="0" checked="checked" /></td>
-	<?php if ($showPicture) {?>
-	<td><b>Bild</b></td>
-	<?php } ?>
+	<td><input type="checkbox" onclick="handleCheckboxClick(this)" name="selectCheckbox" value="0" checked="checked" /></td>
+	<?php if ($showPicture) { ?><td><b>Bild</b></td><?php } ?>
+	<td><b>Status</b></td>
 	<td><b>Name</b></td>
+	<td><b>E-Mail</b></td>
 	<td><b>Änderungsdatum</b></td>
     </tr>
 
 <?php
-$r = $ed->getListOfUploadedImages();
-$zero = (count($r["result"]) == 0);
+$r = $ed->getListOfUploadedImagesAtYearAndState($selectedYear);
 
-if ($zero) {
+$isZero = (count($r["result"]) == 0);
+
+if ($isZero) {
 ?>
 
     <tr>
-	<td colspan="<?php echo $showPicture ? 4 : 3; ?>">Es gibt aktuell keine Uploads für das Jahr <?php echo date("Y"); ?>.</td>
+	<td colspan="<?php echo $showPicture ? 6 : 5; ?>">Es gibt aktuell keine Uploads für die <?php echo ($state == "ma") ? "Mastereinführungstage " : "ErstiWoche "; echo $selectedYear; ?>.</td>
     </tr>
-
 
 <?php
 } else {
+	$lastDownload = $ed->getSetting('lastDownload');
 	foreach($r["result"] as $line) {
+		$imageIsNew = ($line["uploaddatum"] > $lastDownload);
 ?>
 
-    <tr>
-	<td><input type="checkbox" name="liste[]" value="<?php echo $line["id"] ?>" checked="checked" /></td>
+    <tr <?php if ($imageIsNew) echo 'class="new"';?>>
+	<td><input type="checkbox" name="liste[]" value="<?php echo $line["id"] ?>" <?php if ($imageIsNew) echo 'checked="checked"';?> /></td>
 	<?php if ($showPicture) {?>
-	<td><img alt="Bild-<?php echo $line["id"] ?>" src="<?php echo 'bild.php?id='.$line["id"] ?>" /></td>
+	<td><img alt="bild-<?php echo $line["id"] ?>" src="bild.php?id=<?php echo $line["id"] ?>" /></td>
 	<?php } ?>
-	<td><?php echo str_replace("'", "", $line["vorname"])." ".str_replace("'", "", $line["nachname"]); ?></td>
-	<td><?php echo $line["uploaddatum"]; ?> Uhr</td>
+	<td><?php echo ($ed->getSetting('state') == "ba") ? "ba, ".$line["faculty"].", ".$line["course"] : "ma, ".$line["faculty"]; ?></td>
+	<td><?php echo $line["name"]; ?></td>
+	<td><?php echo $line["email"]; ?></td>
+	<td><?php echo date('G:i:s', $line["uploaddatum"]); ?> Uhr<br /><?php echo date('d-m-Y', $line["uploaddatum"]); ?></td>
     </tr>
 
 <?php
@@ -163,16 +253,19 @@ if ($zero) {
 ?>
 
     <tr>
-	<td colspan="4"><input type="submit" name="submitButton" value="Bilder-Download als ZIP" <?php if ($zero) echo 'disabled'; ?>></td>
+	<td colspan="<?php echo $showPicture ? 6 : 5; ?>"><input type="submit" name="submitButton" value="Bilder-Download als ZIP" <?php if ($isZero) echo 'disabled'; ?>></td>
     </tr>
 </table>
 </form>
 
-<h3>Logout und Zurück</h3>
-
-<p>Bitte nach Benutzen wieder <a href="<?echo $logoutUrl;?>">ausloggen</a>!</p>
+<form action="<? echo $logoutUrl; ?>">
+	<p><br /><input type="submit" value="Logout"></p>
+</form>
 
 </div>
+
+<br /><br />
+
 </body>
 
 </html>
