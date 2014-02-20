@@ -192,7 +192,7 @@ Alles andere passiert automatisch und Ihr müsst Euch nicht mehr mit Dateitypen,
 	Sende uns dann dein Bild mit einem Klick auf den Button zu.
 	Beachte: Je nach Größe des ausgewählten Bildes und der Geschwindigkeit deiner Internetverbindung kann dies einige Zeit dauern.</p>
     <input name="absenden" type="submit" value="Abschicken" /><br/>
-	<p>Wenn du jetzt dein Bild doch nicht hochladen willst, logge dich <a href="<?echo $logoutUrl;?>">HIER</a> wieder aus.</p>
+	<p>Wenn du jetzt dein Bild doch nicht hochladen willst, logge dich <a href="<?echo htmlspecialchars($logoutUrl);?>">HIER</a> wieder aus.</p>
 </form>
 
 <?php
@@ -202,7 +202,7 @@ Alles andere passiert automatisch und Ihr müsst Euch nicht mehr mit Dateitypen,
 <p>der Bilderupload ist im Moment deaktiviert.</p>
 <p>Falls Du schon eine Aufforderung zur Einreichung des Bildes bekommen hast, melde Dich bitte bei <a href="mailto:it@erstiwoche.de">it@erstiwoche.de</a>.
 Ansonsten wird demnächst unsere IT den Upload freigeben.</p>
-<form action="<? echo $logoutUrl; ?>">
+<form action="<? echo htmlspecialchars($logoutUrl); ?>" method="POST">
 	<p><br /><input type="submit" value="Logout"></p>
 </form>
 

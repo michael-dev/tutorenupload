@@ -258,7 +258,7 @@ if ($isZero) {
 </table>
 </form>
 
-<form action="<? echo $logoutUrl; ?>">
+<form action="<? echo htmlspecialchars($logoutUrl); ?>" method="POST">
 	<p><br /><input type="submit" value="Logout"></p>
 </form>
 
