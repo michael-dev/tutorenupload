@@ -18,13 +18,13 @@
 
 header('Content-Type: text/html; charset=utf-8');
 require_once("../config/config.php");
-require_once '../lib/EditImage.php';
+require_once PATH_EDIT_IMAGE_CLASS;
 
-if (CONFIG_ONLINE) require_once '../lib/inc.simplesaml.php';
-else require_once '../lib/inc.simplesaml.fake.php';
+if (CONFIG_ONLINE) require_once PATH_SIMPLESAML;
+else require_once PATH_SIMPLESAML_FAKE;
 
-// Zugriff prüfen mit Gruppenrecht "ag-erstiwoche"
-requireGroup($ADMINGROUP);
+
+requireGroup($ADMINGROUP); // Zugriff prüfen mit Gruppenrecht "ag-erstiwoche"
 ?>
 
 <html>

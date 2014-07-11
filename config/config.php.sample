@@ -1,9 +1,9 @@
 <?php
 // database
-define("CONFIG_DBHOST", 'FIXME');
-define("CONFIG_DBNAME", 'FIXME');
-define("CONFIG_DBUSER", 'FIXME');
-define("CONFIG_DBPASS", 'FIXME');
+define("CONFIG_DBHOST", FIXME);
+define("CONFIG_DBNAME", FIXME);
+define("CONFIG_DBUSER", FIXME);
+define("CONFIG_DBPASS", FIXME);
 
 // database tables
 define("TABSETTINGSNAME", 'tutorenupload__settings');
@@ -30,7 +30,9 @@ define("TABDATASCHEME",
 );
 
 // site settings
-define("CONFIG_ONLINE", true);
+define("CONFIG_ONLINE", false);
 
 // image settings
-define("CONFIG_MAXIMAGESIZE", 100000); // bytes
+define("CONFIG_PICTURE_WIDTH", 75); // pixel
+define("CONFIG_PICTURE_HEIGHT", 100); // pixel
+define("CONFIG_PICTURE_MAXSIZE", 100000); // bytes

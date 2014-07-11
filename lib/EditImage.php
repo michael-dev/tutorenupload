@@ -18,13 +18,11 @@
  */
 
 require_once("../config/config.php");
- 
+require_once PATH_FACE_DETECTION_CLASS; 
+
 // To use this class, enable the pdo-database driver on the server in file 'php.ini'.
 // To do this, comment out the line 'extension=php_pdo_mysql.dll' in 'php.ini' for a mysql database.
 class EditImage {
-    // Abmaße der neuen Bilder in Pixel
-    const WIDTH = 75;
-    const HEIGHT = 100;
 
     private $database;
 
@@ -156,17 +154,64 @@ class EditImage {
 	}
 
     // INDEX.PHP
-    public function resizeAndUpload($faculty, $course, $name, $mail, $filename) {
-        $imageMetaData = getimagesize($filename);
+	public function detectFace($filename) {
+		$imageResource = $this->getJpegResourceFromAnyImage($filename);
+		if ($imageResource !== false) {
+			if (imagesx($imageResource) > CONFIG_PICTURE_MAXWIDTH) {
+				$imageResource = $this->resizeDownJpegWithAspectRatio($imageResource);
+			}
+		
+			$fd = new FaceDetector(PATH_FACE_DETECTION_DATA);
+			$success = $fd->faceDetect($imageResource);
+			
+			ob_start();
+			$fd->toJpeg();
+			$data = ob_get_contents();
+			ob_end_clean();
+			
+			$width = imagesx($imageResource);
+			$height = imagesy($imageResource);
+			if ($success) {
+				$coordinates = $fd->getFace();
 
-		$width = $imageMetaData[0];
-        $height = $imageMetaData[1];
+				// Werte anpassen, falls außerhalb der Grenzen
+				if (($coordinates["y"] + $this->calculateHeight($coordinates["w"])) > $height) {
+					$coordinates["w"] = $height - $coordinates["y"] - 70;
+				}
+				if (($coordinates["x"] + $coordinates["w"]) > $width) {
+					$coordinates["w"] = $width - $coordinates["x"] - 70;
+				}
+				
+				$coordinates["width"] = $width;
+				$coordinates["height"] = $height;
+				return $this->returnValue(true, $data, $coordinates, NULL);
+			} else {
+				$coordinates = array(
+					"x" => 20,
+					"y" => 20,
+					"w" => 50,
+					"width" => $width,
+					"height" => $height
+				);
+				return $this->returnValue(false, $data, $coordinates, "Gesichtserkennung schlug fehl!");
+			}
+		} else {
+			return $this->returnValue(false, NULL, NULL, "Dateiformat wird nicht untersützt!");
+		}
+	}
+	
+	private function getJpegResourceFromAnyImage($filename) {
+		$imageMetaData = getimagesize($filename);
 		$type = $imageMetaData[2];
 		
-        $source;
+		$source;
         switch($type) {
             case IMAGETYPE_GIF:
-                $source = imagecreatefromgif($filename);
+                $picdata = file_get_contents($filename);
+				$source = imagecreatetruecolor(imagesx($picdata), imagesy($picdata));
+				imagefill($source, 0, 0, imagecolorallocate($source, 255, 255, 255));
+				imagealphablending($source, TRUE);
+				imagecopy($source, $picdata, 0, 0, 0, 0, imagesx($picdata), imagesy($picdata));
                 break;
 
             case IMAGETYPE_JPEG;
@@ -174,16 +219,26 @@ class EditImage {
                 break;
 
             case IMAGETYPE_PNG:
-                $source = imagecreatefrompng($filename);
+                $picdata = imagecreatefrompng($filename);
+				$source = imagecreatetruecolor(imagesx($picdata), imagesy($picdata));
+				imagefill($source, 0, 0, imagecolorallocate($source, 255, 255, 255));
+				imagealphablending($source, TRUE);
+				imagecopy($source, $picdata, 0, 0, 0, 0, imagesx($picdata), imagesy($picdata));
                 break;
 
             default:
-                return $this->returnValue(false, NULL, NULL, "Dateiformat wird nicht untersützt!");
+                return false;
         }
-
-        $thumb = imagecreatetruecolor(self::WIDTH, self::HEIGHT);
+		
+		return $source;
+	}
+	
+    public function resizeAndUpload($faculty, $course, $name, $mail, $face, $datastring) {
+        $source = imagecreatefromstring($datastring);
+		
+        $thumb = imagecreatetruecolor(CONFIG_PICTURE_WIDTH, CONFIG_PICTURE_HEIGHT);
         imagealphablending($thumb, false);
-        imagecopyresized($thumb, $source, 0, 0, 0, 0, self::WIDTH, self::HEIGHT, $width, $height);
+        imagecopyresized($thumb, $source, 0, 0, $face["x"], $face["y"], CONFIG_PICTURE_WIDTH, CONFIG_PICTURE_HEIGHT, $face["w"], $this->calculateHeight($face["w"]));
 
         // Ausgabe puffern, d.h. den rohen Datenstrom in die Variable $contents schreiben statt ihn auszugeben
         ob_start();
@@ -198,6 +253,24 @@ class EditImage {
         }
     }
 
+	private function calculateHeight($width) {
+		return intval($width * 5 / 4);
+	}
+    
+    private function resizeDownJpegWithAspectRatio($imageResource) {
+		$originalWidth = imagesx($imageResource);
+		$originalHeight = imagesy($imageResource);
+		
+        if ($originalWidth <= 0 || $originalHeight <= 0) return false;
+		
+		$newWidth = CONFIG_PICTURE_MAXWIDTH;
+		$newHeight = intval($originalHeight * (CONFIG_PICTURE_MAXWIDTH / $originalWidth));
+		
+		$thumb = imagecreatetruecolor($newWidth, $newHeight);
+		imagecopyresized($thumb, $imageResource, 0, 0, 0, 0, $newWidth, $newHeight, $originalWidth, $originalHeight);
+		return $thumb;
+	}
+	
     private function saveImage($faculty, $course, $name, $email, $data) {
 		// schaue nach, ob es bereits schon ein Eintrag derjenigen Person im aktuellen Jahr gibt
 		$stmt = $this->database->prepare("SELECT id FROM ".TABDATANAME." WHERE email = '\\'".$email."\'' AND tutorenjahr = ".date("Y")." AND state = '".$this->getSetting('state')."'");
