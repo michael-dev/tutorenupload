@@ -1,9 +1,9 @@
 <?php
 // database
-define("CONFIG_DBHOST", FIXME);
-define("CONFIG_DBNAME", FIXME);
-define("CONFIG_DBUSER", FIXME);
-define("CONFIG_DBPASS", FIXME);
+define("CONFIG_DBHOST", 'FIXME');
+define("CONFIG_DBNAME", 'FIXME');
+define("CONFIG_DBUSER", 'FIXME');
+define("CONFIG_DBPASS", 'FIXME');
 
 // database tables
 define("TABSETTINGSNAME", 'tutorenupload__settings');
@@ -15,7 +15,6 @@ define("TABSETTINGSSCHEME",
 	`value` VARCHAR(30),
 	PRIMARY KEY (`feature`)'
 );
-
 define("TABDATASCHEME",
 	'`id` INT NOT NULL auto_increment,
 	`tutorenjahr` INT NOT NULL,
@@ -29,10 +28,18 @@ define("TABDATASCHEME",
 	PRIMARY KEY (`id`)'
 );
 
+// paths and libaries
+define("PATH_FACE_DETECTION_CLASS", "../lib/facedetection/FaceDetector.php");
+define("PATH_FACE_DETECTION_DATA" , "../lib/facedetection/detection.dat");
+define("PATH_EDIT_IMAGE_CLASS"    , "../lib/EditImage.php");
+define("PATH_SIMPLESAML"          , "../lib/simplesaml/inc.simplesaml.php");
+define("PATH_SIMPLESAML_FAKE"     , "../lib/simplesaml/inc.simplesaml.fake.php");
+
 // site settings
 define("CONFIG_ONLINE", false);
 
 // image settings
 define("CONFIG_PICTURE_WIDTH", 75); // pixel
+define("CONFIG_PICTURE_MAXWIDTH", 580); // pixel
 define("CONFIG_PICTURE_HEIGHT", 100); // pixel
-define("CONFIG_PICTURE_MAXSIZE", 100000); // bytes
+define("CONFIG_PICTURE_MAXSIZE", 2000000); // bytes

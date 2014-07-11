@@ -460,7 +460,7 @@ rectWidth = <?php echo $r["result"]["w"]; ?>;
 	Sende uns dann dein Bild mit einem Klick auf den Button zu.</p>
     <input name="absenden" type="submit" value="So finde ich das gut!">
 </form>
-<form action="<? echo $logoutUrl; ?>">
+<form action="<? echo htmlspecialchars($logoutUrl); ?>">
 	<p><input type="submit" value="Logout"></p>
 </form>
 <form action="index.php">
