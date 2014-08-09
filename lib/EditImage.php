@@ -32,10 +32,11 @@ class EditImage {
 		// Einstellungen definieren
 		array_push(
 			$this->settings,
-			array("name" => "showPicture",   "initialValue" => 0),
-			array("name" => "state",         "initialValue" => "ba"),
-			array("name" => "lastDownload",  "initialValue" => 0),
-			array("name" => "active",        "initialValue" => 0)
+			array("name" => "showPicture",  "initialValue" => 0),
+			array("name" => "term",         "initialValue" => "ws"),
+			array("name" => "lastDownload", "initialValue" => 0),
+			array("name" => "active",       "initialValue" => 0),
+			array("name" => "version",      "initialValue" => 1)
 		);
 		
 		try {
@@ -128,20 +129,65 @@ class EditImage {
 			return $stmt->fetchColumn();
         }
     }
+	
+	public function migrateData() {
+		if (self::getSetting('version') <= 3) {
+			$stmt = $this->database->prepare("ALTER TABLE ".TABDATANAME." ADD term varchar(10)");
+			$suc1 = $stmt->execute();
+			
+			$stmt = $this->database->prepare("UPDATE ".TABDATANAME." SET term = 'ss' WHERE state = 'ma'");
+			$suc2 = $stmt->execute();
+			
+			$stmt = $this->database->prepare("UPDATE ".TABDATANAME." SET term = 'ws' WHERE state = 'ba'");
+			$suc3 = $stmt->execute();
+			
+			if ($suc1 && $suc2 && $suc3) {
+				self::saveSetting('version', 4);
+				echo "<p>Datenbank erfolgreich auf Version 4 migriert.</p>";
+			} else {
+				var_dump($stmt->errorInfo());
+				die("<p>Datenbank konnte nicht auf Version 4 migriert werden. :-(</p>");
+			}
+		}
+	}
 
 	// ADMIN.PHP
-	public function getListOfUploadedImagesAtYearAndState($year) {
-        $stmt = $this->database->prepare("SELECT id, faculty, course, name, email, uploaddatum FROM ".TABDATANAME." WHERE tutorenjahr = ".$year." AND state = '".$this->getSetting('state')."' ORDER BY uploaddatum DESC");
-		$succ = $stmt->execute();
-		$data = $stmt->fetchAll();
+	public function getListOfUploadedImagesAtYearAndTerm($year) {
+		$term = self::getSetting('term');
 		
-		// Escapes aus $data entfernen
-		for ($i=0; $i<count($data); $i++) {
-			$data[$i]["name"] = str_replace("'", "", $data[$i]["name"]);
-			$data[$i]["email"] = str_replace("'", "", $data[$i]["email"]);
+		$state = "ba";
+        $stmt = $this->database->prepare("SELECT id, faculty, course, name, email, uploaddatum FROM ".TABDATANAME." WHERE tutorenjahr = ? AND term = ? AND state = ? ORDER BY uploaddatum DESC");
+		$stmt->bindParam(1, $year);
+		$stmt->bindParam(2, $term);
+		$stmt->bindParam(3, $state);
+		$succ1 = $stmt->execute();
+		$baData = $stmt->fetchAll();
+		// Escapes aus $baData entfernen
+		for ($i=0; $i<count($baData); $i++) {
+			$baData[$i]["name"] = str_replace("'", "", $baData[$i]["name"]);
+			$baData[$i]["email"] = str_replace("'", "", $baData[$i]["email"]);
 		}
 		
-        return $this->returnValue($succ, NULL, $data, "");
+		$state = "ma";
+		$stmt = $this->database->prepare("SELECT id, faculty, course, name, email, uploaddatum FROM ".TABDATANAME." WHERE tutorenjahr = ? AND term = ? AND state = ? ORDER BY uploaddatum DESC");
+		$stmt->bindParam(1, $year);
+		$stmt->bindParam(2, $term);
+		$stmt->bindParam(3, $state);
+		$succ2 = $stmt->execute();
+		$maData = $stmt->fetchAll();
+		// Escapes aus $maData entfernen
+		for ($i=0; $i<count($maData); $i++) {
+			$maData[$i]["name"] = str_replace("'", "", $maData[$i]["name"]);
+			$maData[$i]["email"] = str_replace("'", "", $maData[$i]["email"]);
+		}
+		
+		$retArray = array();
+		$retArray["ba"] = $baData;
+		$retArray["baZero"] = (count($baData) == 0);
+		$retArray["ma"] = $maData;
+		$retArray["maZero"] = (count($maData) == 0);
+		
+        return $this->returnValue(($succ1 && $succ2), NULL, $retArray, "");
     }
 	
 	
@@ -175,6 +221,7 @@ class EditImage {
 				$coordinates = $fd->getFace();
 
 				// Werte anpassen, falls außerhalb der Grenzen
+				// Prüfung notwendig, da Bibliothek manchmal solche Werte zurückgibt
 				if (($coordinates["y"] + $this->calculateHeight($coordinates["w"])) > $height) {
 					$coordinates["w"] = $height - $coordinates["y"] - 70;
 				}
@@ -233,7 +280,7 @@ class EditImage {
 		return $source;
 	}
 	
-    public function resizeAndUpload($faculty, $course, $name, $mail, $face, $datastring) {
+    public function resizeAndUpload($faculty, $course, $name, $mail, $responsibility, $face, $datastring) {
         $source = imagecreatefromstring($datastring);
 		
         $thumb = imagecreatetruecolor(CONFIG_PICTURE_WIDTH, CONFIG_PICTURE_HEIGHT);
@@ -245,9 +292,9 @@ class EditImage {
         imagejpeg($thumb);
         $contents =  ob_get_contents();
         ob_end_clean();
-
+		
         if ($contents !== false) {
-            return $this->saveImage($faculty, $course, $name, $mail, $contents);
+            return $this->saveImage($faculty, $course, $name, $mail, $responsibility, $contents);
         } else {
             return $this->returnValue();
         }
@@ -271,36 +318,42 @@ class EditImage {
 		return $thumb;
 	}
 	
-    private function saveImage($faculty, $course, $name, $email, $data) {
+    private function saveImage($faculty, $course, $name, $email, $res, $data) {
 		// schaue nach, ob es bereits schon ein Eintrag derjenigen Person im aktuellen Jahr gibt
-		$stmt = $this->database->prepare("SELECT id FROM ".TABDATANAME." WHERE email = '\\'".$email."\'' AND tutorenjahr = ".date("Y")." AND state = '".$this->getSetting('state')."'");
-		$stmt->execute();
+		$stmt = $this->database->prepare("SELECT id FROM ".TABDATANAME." WHERE email = ? AND tutorenjahr = ? AND term = ?");
+		$m = "'".$email."'";
+		$stmt->bindParam(1, $m);
+		$stmt->bindParam(2, date("Y"));
+		$stmt->bindParam(3, self::getSetting('term'));
+		$succ1 = $stmt->execute();
 		$ret = $stmt->fetchAll();
 		
 		if (count($ret) > 1) {
 			// Fehler, da eine ID mehrmals vorhanden :-(
-			return $this->returnValue();
+			return $this->returnValue(false, NULL, NULL, "Inkosistenz in der Datenbank. Bitte kontaktieren Sie den Administrator.");
 		} elseif (count($ret) == 1) {
-			$stmt = $this->database->prepare("UPDATE ".TABDATANAME." SET faculty = ?, course = ?, uploaddatum = ?, bild = ? WHERE id = ".$ret[0]["id"]);
-			$stmt->bindParam(1, $faculty);
-			$stmt->bindParam(2, $course);
-			$stmt->bindParam(3, time());
-			$stmt->bindParam(4, $data);
+			$stmt = $this->database->prepare("UPDATE ".TABDATANAME." SET state = ?, faculty = ?, course = ?, uploaddatum = ?, bild = ? WHERE id = ".$ret[0]["id"]);
+			$stmt->bindParam(1, $res);
+			$stmt->bindParam(2, $faculty);
+			$stmt->bindParam(3, $course);
+			$stmt->bindParam(4, time());
+			$stmt->bindParam(5, $data);
 		} else {		
-			$stmt = $this->database->prepare("INSERT INTO ".TABDATANAME." (tutorenjahr, state, faculty, course, name, email, uploaddatum, bild) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+			$stmt = $this->database->prepare("INSERT INTO ".TABDATANAME." (tutorenjahr, state, faculty, course, name, email, uploaddatum, bild, term) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
 			$stmt->bindParam(1, date("Y"));
-			$stmt->bindParam(2, $this->getSetting('state'));
+			$stmt->bindParam(2, $res);
 			$stmt->bindParam(3, $faculty);
 			$stmt->bindParam(4, $course);
 			$stmt->bindParam(5, $this->database->quote($name));
 			$stmt->bindParam(6, $this->database->quote($email));
 			$stmt->bindParam(7, time());
 			$stmt->bindParam(8, $data);
+			$stmt->bindParam(9, self::getSetting('term'));
 		}
 		
-		$succ = $stmt->execute();
+		$succ2 = $stmt->execute();
 
-		if ($succ) {
+		if ($succ1 && $succ2) {
 			return $this->returnValue(true, $data, $this->database->lastInsertId(), "");
 		} else {
 			return $this->returnValue(false, NULL, NULL, "Bild konnte nicht gespeichert werden.");
@@ -309,7 +362,7 @@ class EditImage {
 
     // BILD.PHP, ARCHIV.PHP
     public function getImageAsStringByID($id) {
-        $stmt = $this->database->prepare("SELECT faculty, course, name, bild FROM ".TABDATANAME." WHERE id = ".$id);
+        $stmt = $this->database->prepare("SELECT state, faculty, course, name, bild FROM ".TABDATANAME." WHERE id = ".$id);
 
         $succ = $stmt->execute();
         $val = $stmt->fetch();
@@ -317,10 +370,10 @@ class EditImage {
 		$name = str_replace("'", "", $val["name"]);
 		$name = strtolower($name);
 		$name = str_replace(" ", "-", $name);
-		if ($this->getSetting('state') == "ba") {
+		if (strcmp($val["state"], "ba") == 0) {
 			$name = $val["course"]."-".$name;
 		}
-		$name = self::getSetting('state')."-".$val["faculty"]."-".$name;
+		$name = self::getSetting('term')."-".$val["state"]."-".$val["faculty"]."-".$name;
 		
 		$bild = $val["bild"];
 		

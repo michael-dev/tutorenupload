@@ -23,14 +23,15 @@ require_once PATH_EDIT_IMAGE_CLASS;
 if (CONFIG_ONLINE) require_once PATH_SIMPLESAML;
 else require_once PATH_SIMPLESAML_FAKE;
 
-requireGroup($AUTHGROUP); // Zugriff prüfen mit Gruppenrecht "tutor, ag-erstiwoche"
-
-$email = getUserMail();
-$name = getFullName();
+// Zugriff prüfen mit Gruppenrecht "tutor, tutor-master, ag-erstiwoche"
+$user = authenticateUserAndGetUserData($AUTHGROUP); 
 
 $ed = new EditImage();
 
-$stateIsBa = ($ed->getSetting('state') == "ba");
+$stateIsBa = (strcmp($user["responsibility"], "ba") == 0);
+$termIsWS = (strcmp($ed->getSetting('term'), "ws") == 0);
+
+if (!$termIsWS && $stateIsBa) die("FEHLER #666! Bitte melde den Fehler an unsere IT.");
 ?>
 
 <html>
@@ -377,7 +378,7 @@ $(document).ready(function() {
 
 <img alt="Logo der ErstiWoche" src="erstiwoche.png">
 
-<h1>Bildupload für Tutoren der <?php echo $stateIsBa ? 'ErstiWoche' : 'Mastereinführungstage';?></h1>
+<h1>Bildupload für Tutoren der <?php echo $termIsWS ? 'ErstiWoche' : 'Mastereinführungstage';?></h1>
 
 <?php
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
@@ -397,7 +398,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 			$r = $ed->detectFace($filename);
 ?>
 <div id="content" style="border: black solid 1px; padding: 5px;">
-<p>So, <?php echo $name; ?>!
+<p>So, <?php echo $user["fullname"]; ?>!
 <?php
 			// $r["result"] enthält die Koordinaten des erkannten Gesichts
 			// $r["image"] enthält das hochgeladene Bild
@@ -460,7 +461,7 @@ rectWidth = <?php echo $r["result"]["w"]; ?>;
 	Sende uns dann dein Bild mit einem Klick auf den Button zu.</p>
     <input name="absenden" type="submit" value="So finde ich das gut!">
 </form>
-<form action="<? echo htmlspecialchars($logoutUrl); ?>">
+<form action="<? echo htmlspecialchars($logoutUrl); ?>" method="POST">
 	<p><input type="submit" value="Logout"></p>
 </form>
 <form action="index.php">

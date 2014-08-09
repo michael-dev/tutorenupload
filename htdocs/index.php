@@ -23,14 +23,15 @@ require_once PATH_EDIT_IMAGE_CLASS;
 if (CONFIG_ONLINE) require_once PATH_SIMPLESAML;
 else require_once PATH_SIMPLESAML_FAKE;
 
-requireGroup($AUTHGROUP); // Zugriff prüfen mit Gruppenrecht "tutor, ag-erstiwoche"
-
-$email = getUserMail();
-$name = getFullName();
+// Zugriff prüfen mit Gruppenrecht "tutor, tutor-master, ag-erstiwoche"
+$user = authenticateUserAndGetUserData($AUTHGROUP); 
 
 $ed = new EditImage();
 
-$stateIsBa = ($ed->getSetting('state') == "ba");
+$stateIsBa = (strcmp($user["responsibility"], "ba") == 0);
+$termIsWS = (strcmp($ed->getSetting('term'), "ws") == 0);
+
+if (!$termIsWS && $stateIsBa) die("FEHLER #666<br />Bitte melde den Fehler an unsere IT.");
 ?>
 
 <html>
@@ -48,7 +49,7 @@ $stateIsBa = ($ed->getSetting('state') == "ba");
 
 <img alt="Logo der ErstiWoche" src="erstiwoche.png">
 
-<h1>Bildupload für Tutoren der <?php echo $stateIsBa ? 'ErstiWoche' : 'Mastereinführungstage';?></h1>
+<h1>Bildupload für Tutoren der <?php echo $termIsWS ? 'ErstiWoche' : 'Mastereinführungstage';?></h1>
 
 <p>Wie sich in den letzten Jahren herausgestellt hat, bereitet uns und Euch jedes Jahr der Upload der Tutorenbilder immer wieder viel Arbeit.
 Es müssen für jedes Jahr und für jeden Tutor neue Bilder ausgesucht, auf die entsprechende Größe skaliert, entsprechend benannt und auf den StuRa-Server hochgeladen werden.</p>
@@ -58,7 +59,7 @@ Das bedeutet für Euch, dass Ihr einfach nur noch ein Bild von Eurem Computer ü
 Alles andere passiert automatisch und Ihr müsst Euch nicht mehr mit Dateitypen, -namen oder Bildgrößen rumplagen.</p>
 
 <div style="border: black solid 1px; padding: 5px;">
-<p>Hallo <?php echo $name; ?>,</p>
+<p>Hallo <?php echo $user["fullname"]; ?>,</p>
 
 <?php
 if ($ed->getSetting('active')) {

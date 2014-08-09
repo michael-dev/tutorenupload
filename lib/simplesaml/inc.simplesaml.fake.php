@@ -18,25 +18,25 @@
 
 global $logoutUrl;
 
-$logoutUrl = "http://www.erstiwoche.de/";
-
-$AUTHGROUP = "tutor,ag-erstiwoche";
+$AUTHGROUP = "tutor,tutor-master,ag-erstiwoche";
 $ADMINGROUP = "ag-erstiwoche";
 
-function getUserMail() {
-  return "example@stura.tu-ilmenau.de";
-}
-
 function requireAuth() {
+	global $logoutUrl;
+	$logoutUrl = "http://www.erstiwoche.de/";
 }
 
 function requireGroup($group) {
+	requireAuth();
 }
 
-function getUsername() {
-  return "exampleuser";
-}
-
-function getFullName() {
-  return "Example User";
+function authenticateUserAndGetUserData($group) {
+	requireAuth();
+	
+	$returnArray = array();
+	$returnArray["username"] = "exampleuser";
+	$returnArray["fullname"] = "Example User";
+	$returnArray["mail"] = "exa2mple@stura.tu-ilmenau.de";
+	$returnArray["responsibility"] = "ba";
+	return $returnArray;
 }

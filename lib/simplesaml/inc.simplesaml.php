@@ -18,16 +18,10 @@
 
 global $SIMPLESAML, $SIMPLESAMLAUTHSOURCE, $attributes, $logoutUrl;
 
-$SIMPLESAML = dirname(dirname(dirname(__FILE__)))."/simplesamlphp";
+$SIMPLESAML = dirname(dirname(dirname(dirname(__FILE__))))."/simplesamlphp";
 $SIMPLESAMLAUTHSOURCE = "wayfinder";
-$AUTHGROUP = "tutor,ag-erstiwoche,admin,konsul";
-$ADMINGROUP = "konsul,admin,ag-erstiwoche";
-
-function getUserMail() {
-  global $attributes;
-  requireAuth();
-  return $attributes["mail"][0];
-}
+$AUTHGROUP = "tutor,tutor-master,ag-erstiwoche";
+$ADMINGROUP = "ag-erstiwoche";
 
 function requireAuth() {
   global $SIMPLESAML, $SIMPLESAMLAUTHSOURCE;
@@ -42,31 +36,50 @@ function requireAuth() {
 }
 
 function requireGroup($group) {
-  global $attributes;
+	global $attributes;
 
-  requireAuth();
+	requireAuth();
 
-  if (count(array_intersect(explode(",",$group), $attributes["groups"])) == 0) {
-    header('HTTP/1.0 401 Unauthorized');
-    include SGISBASE."/template/permission-denied.tpl";
-    die();
-  }
+	if (count(array_intersect(explode(",",$group), $attributes["groups"])) == 0) {
+		header('HTTP/1.0 401 Unauthorized');
+		include SGISBASE."/template/permission-denied.tpl";
+		die();
+	}
 }
 
-function getUsername() {
-  global $attributes;
-  if (isset($attributes["eduPersonPrincipalName"]) && isset($attributes["eduPersonPrincipalName"][0])) 
-    return $attributes["eduPersonPrincipalName"][0];
-  if (isset($attributes["mail"]) && isset($attributes["mail"][0])) 
-    return $attributes["mail"][0];
-  return NULL;
-}
-
-function getFullName() {
-  global $attributes;
-  if (isset($attributes["displayName"]) && isset($attributes["displayName"][0])) 
-    return $attributes["displayName"][0];
-  if (isset($attributes["mail"]) && isset($attributes["mail"][0])) 
-    return $attributes["mail"][0];
-  return NULL;
+function authenticateUserAndGetUserData($gr) {
+	global $attributes;
+	
+	// wenn Authentifikation nicht erfolgreich, wird hier abgebrochen
+	requireGroup($gr);
+	
+	// baue Ergebnisse zusammen
+	$returnArray = array();
+	
+	if (isset($attributes["eduPersonPrincipalName"]) && isset($attributes["eduPersonPrincipalName"][0])) 
+		$returnArray["username"] = $attributes["eduPersonPrincipalName"][0];
+	else if (isset($attributes["mail"]) && isset($attributes["mail"][0])) 
+		$returnArray["username"] = $attributes["mail"][0];
+	else
+		$returnArray["username"] = NULL;
+	
+	if (isset($attributes["displayName"]) && isset($attributes["displayName"][0])) 
+		$returnArray["fullname"] = $attributes["displayName"][0];
+	else if (isset($attributes["mail"]) && isset($attributes["mail"][0])) 
+		$returnArray["fullname"] = $attributes["mail"][0];
+	else
+		$returnArray["fullname"] = NULL;
+		
+	if (isset($attributes["displayName"]) && isset($attributes["displayName"][0])) 
+		$returnArray["mail"] = $attributes["mail"][0];
+	else
+		$returnArray["mail"] = NULL;
+	
+	if (count(array_intersect(array("tutor"), $attributes["groups"])) == 0) {
+		$returnArray["responsibility"] = "ba";
+	} else {
+		$returnArray["responsibility"] = "ma";
+	}
+	
+	return $returnArray;
 }

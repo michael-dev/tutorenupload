@@ -23,8 +23,8 @@ require_once PATH_EDIT_IMAGE_CLASS;
 if (CONFIG_ONLINE) require_once PATH_SIMPLESAML;
 else require_once PATH_SIMPLESAML_FAKE;
 
-
-requireGroup($ADMINGROUP); // Zugriff prüfen mit Gruppenrecht "ag-erstiwoche"
+// Zugriff prüfen mit Gruppenrecht "ag-erstiwoche"
+$user = authenticateUserAndGetUserData($ADMINGROUP);
 ?>
 
 <html>
@@ -68,7 +68,7 @@ function handleCheckboxClick($box) {
 
 <h1>Bildupload für Tutoren - Adminbereich</h1>
 
-<p>Hallo, <?php echo getFullName(); ?>!
+<p>Hallo, <?php echo $user["fullname"]; ?>!
 Hier kannst du den Upload einstellen und die hochgeladenen Bilder wieder downloaden.
 Bitte logge dich unten nach dem Herunterladen wieder aus!</p>
 
@@ -77,7 +77,7 @@ $ed = new EditImage();
 
 $active = $ed->getSetting('active');
 $showPicture = $ed->getSetting('showPicture');
-$state = $ed->getSetting('state');
+$term = $ed->getSetting('term');
 $selectedYear;
 $changed = false;
 
@@ -114,10 +114,10 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 				$changed = true;
 			}
 			
-			$old = $ed->getSetting('state');
-			$state = $_POST['selectState'];
-			if ($old != $state) {
-				$ed->saveSetting('state', $state);
+			$old = $ed->getSetting('term');
+			$term = $_POST['selectTerm'];
+			if ($old != $term) {
+				$ed->saveSetting('term', $term);
 				$message = $message.', Upload für';
 				$changed = true;
 			}
@@ -135,6 +135,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 			exit;
 	}	
 }
+
+$termIsWS = (strcmp($term, "ws") == 0);
 ?>
 
 <h3>Upload-Einstellungen</h3>
@@ -159,9 +161,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 		<tr>
 	    <td>Upload für</td>
 	    <td>
-			<select name="selectState">
-				<option value="ba" <?php if ($state == "ba") echo "selected"; ?>>ErstiWoche</option>
-				<option value="ma" <?php if ($state == "ma") echo "selected"; ?>>Mastereinführungstage</option>
+			<select name="selectTerm">
+				<option value="ws" <?php if ($termIsWS) echo "selected"; ?>>ErstiWoche</option>
+				<option value="ss" <?php if (!$termIsWS) echo "selected"; ?>>Mastereinführungstage</option>
 			</select>
 		</td>
         </tr>
@@ -207,55 +209,109 @@ Alle rot markierten Zeilen sind neue Bilder, die seit dem letzten Download hinzu
 </form>
 
 <form name="ShowUploadsForm" action="archiv.php" method="post">
-<table class="tabelle" width="700px" style="border-collapse: collapse; border: solid black 1px;">
-    <tr>
-	<td><input type="checkbox" onclick="handleCheckboxClick(this)" name="selectCheckbox" value="0" checked="checked" /></td>
-	<?php if ($showPicture) { ?><td><b>Bild</b></td><?php } ?>
-	<td><b>Status</b></td>
-	<td><b>Name</b></td>
-	<td><b>E-Mail</b></td>
-	<td><b>Änderungsdatum</b></td>
-    </tr>
+	<table class="tabelle" width="700px" style="border-collapse: collapse; border: solid black 1px;">
+		<tr>
+		<td><input type="checkbox" onclick="handleCheckboxClick(this)" name="selectCheckbox" value="0" checked="checked" /></td>
+		<?php if ($showPicture) { ?><td><b>Bild</b></td><?php } ?>
+		<td><b>Status</b></td>
+		<td><b>Name</b></td>
+		<td><b>E-Mail</b></td>
+		<td><b>Änderungsdatum</b></td>
+		</tr>
 
 <?php
-$r = $ed->getListOfUploadedImagesAtYearAndState($selectedYear);
+$r = $ed->getListOfUploadedImagesAtYearAndTerm($selectedYear);
 
-$isZero = (count($r["result"]) == 0);
+$isZero = ($r["result"]["baZero"] && $r["result"]["maZero"]);
 
 if ($isZero) {
 ?>
 
-    <tr>
-	<td colspan="<?php echo $showPicture ? 6 : 5; ?>">Es gibt aktuell keine Uploads für die <?php echo ($state == "ma") ? "Mastereinführungstage " : "ErstiWoche "; echo $selectedYear; ?>.</td>
-    </tr>
+		<tr>
+		<td colspan="<?php echo $showPicture ? 6 : 5; ?>">Es gibt aktuell keine Uploads für die <?php echo ($termIsWS) ? "ErstiWoche " : "Mastereinführungstage ".$selectedYear; ?>.</td>
+		</tr>
 
 <?php
 } else {
 	$lastDownload = $ed->getSetting('lastDownload');
-	foreach($r["result"] as $line) {
-		$imageIsNew = ($line["uploaddatum"] > $lastDownload);
+	if ($termIsWS) {
 ?>
 
-    <tr <?php if ($imageIsNew) echo 'class="new"';?>>
-	<td><input type="checkbox" name="liste[]" value="<?php echo $line["id"] ?>" <?php if ($imageIsNew) echo 'checked="checked"';?> /></td>
-	<?php if ($showPicture) {?>
-	<td><img alt="bild-<?php echo $line["id"] ?>" src="bild.php?id=<?php echo $line["id"] ?>" /></td>
-	<?php } ?>
-	<td><?php echo ($ed->getSetting('state') == "ba") ? "ba, ".$line["faculty"].", ".$line["course"] : "ma, ".$line["faculty"]; ?></td>
-	<td><?php echo $line["name"]; ?></td>
-	<td><?php echo $line["email"]; ?></td>
-	<td><?php echo date('G:i:s', $line["uploaddatum"]); ?> Uhr<br /><?php echo date('d-m-Y', $line["uploaddatum"]); ?></td>
-    </tr>
+		<tr>
+		<td colspan="<?php echo $showPicture ? 6 : 5; ?>"><b>Mastertutoren</b></td>
+		</tr>
 
 <?php
+	}
+	if ($r["result"]["maZero"]) {
+?>
+
+		<tr>
+		<td colspan="<?php echo $showPicture ? 6 : 5; ?>">Bisher noch keine Uploads.</td>
+		</tr>
+
+<?php
+	} else {
+		foreach($r["result"]["ma"] as $line) {
+			$imageIsNew = ($line["uploaddatum"] > $lastDownload);
+?>
+
+		<tr <?php if ($imageIsNew) echo 'class="new"';?>>
+		<td><input type="checkbox" name="liste[]" value="<?php echo $line["id"] ?>" <?php if ($imageIsNew) echo 'checked="checked"';?> /></td>
+		<?php if ($showPicture) {?>
+		<td><img alt="bild-<?php echo $line["id"] ?>" src="bild.php?id=<?php echo $line["id"] ?>" /></td>
+		<?php } ?>
+		<td><?php echo "ma, ".$line["faculty"]; ?></td>
+		<td><?php echo $line["name"]; ?></td>
+		<td><?php echo $line["email"]; ?></td>
+		<td><?php echo date('G:i:s', $line["uploaddatum"]); ?> Uhr<br /><?php echo date('d-m-Y', $line["uploaddatum"]); ?></td>
+		</tr>
+
+<?php
+		}
+	}
+	if ($termIsWS) {
+?>
+		
+		<tr>
+		<td colspan="<?php echo $showPicture ? 6 : 5; ?>"><b>Bachelortutoren</b></td>
+		</tr>
+		
+<?php
+		if ($r["result"]["baZero"]) {
+?>
+
+		<tr>
+		<td colspan="<?php echo $showPicture ? 6 : 5; ?>">Bisher noch keine Uploads.</td>
+		</tr>
+<?php
+		} else {
+			foreach($r["result"]["ba"] as $line) {
+				$imageIsNew = ($line["uploaddatum"] > $lastDownload);
+?>
+
+		<tr <?php if ($imageIsNew) echo 'class="new"';?>>
+		<td><input type="checkbox" name="liste[]" value="<?php echo $line["id"] ?>" <?php if ($imageIsNew) echo 'checked="checked"';?> /></td>
+		<?php if ($showPicture) {?>
+		<td><img alt="bild-<?php echo $line["id"] ?>" src="bild.php?id=<?php echo $line["id"] ?>" /></td>
+		<?php } ?>
+		<td><?php echo "ba, ".$line["faculty"].", ".$line["course"]; ?></td>
+		<td><?php echo $line["name"]; ?></td>
+		<td><?php echo $line["email"]; ?></td>
+		<td><?php echo date('G:i:s', $line["uploaddatum"]); ?> Uhr<br /><?php echo date('d-m-Y', $line["uploaddatum"]); ?></td>
+		</tr>
+
+<?php
+			}
+		}
 	}
 }
 ?>
 
-    <tr>
-	<td colspan="<?php echo $showPicture ? 6 : 5; ?>"><input type="submit" name="submitButton" value="Bilder-Download als ZIP" <?php if ($isZero) echo 'disabled'; ?>></td>
-    </tr>
-</table>
+		<tr>
+		<td colspan="<?php echo $showPicture ? 6 : 5; ?>"><input type="submit" name="submitButton" value="Bilder-Download als ZIP" <?php if ($isZero) echo 'disabled'; ?>></td>
+		</tr>
+	</table>
 </form>
 
 <form action="<? echo htmlspecialchars($logoutUrl); ?>" method="POST">

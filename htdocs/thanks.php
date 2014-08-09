@@ -23,14 +23,15 @@ require_once PATH_EDIT_IMAGE_CLASS;
 if (CONFIG_ONLINE) require_once PATH_SIMPLESAML;
 else require_once PATH_SIMPLESAML_FAKE;
 
-requireGroup($AUTHGROUP); // Zugriff prüfen mit Gruppenrecht "tutor, ag-erstiwoche"
-
-$email = getUserMail();
-$name = getFullName();
+// Zugriff prüfen mit Gruppenrecht "tutor, tutor-master, ag-erstiwoche"
+$user = authenticateUserAndGetUserData($AUTHGROUP); 
 
 $ed = new EditImage();
 
-$stateIsBa = ($ed->getSetting('state') == "ba");
+$stateIsBa = (strcmp($user["responsibility"], "ba") == 0);
+$termIsWS = (strcmp($ed->getSetting('term'), "ws") == 0);
+
+if (!$termIsWS && $stateIsBa) die("FEHLER #666! Bitte melde den Fehler an unsere IT.");
 ?>
 
 <html>
@@ -48,7 +49,7 @@ $stateIsBa = ($ed->getSetting('state') == "ba");
 
 <img alt="Logo der ErstiWoche" src="erstiwoche.png">
 
-<h1>Bildupload für Tutoren der <?php echo $stateIsBa ? 'ErstiWoche' : 'Mastereinführungstage';?></h1>
+<h1>Bildupload für Tutoren der <?php echo $termIsWS ? 'ErstiWoche' : 'Mastereinführungstage';?></h1>
 
 <?php
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
@@ -75,7 +76,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 			$kurs = $_POST["selectCourse"];
 		}
 		
-		$r = $ed->resizeAndUpload($fak, $kurs, $name, $email, $face, $imagestring);
+		$r = $ed->resizeAndUpload($fak, $kurs, $user["fullname"], $user["mail"], $user["responsibility"], $face, $imagestring);
 		
 		// in $r["result"] steht nun die Datenbank-ID des hochgeladenen Bildes
 		// $r["image"] enthält das hochgeladene Bild
@@ -83,12 +84,12 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 ?>
 
 <div style="border: black solid 1px; padding: 5px;">
-<p>Danke, <?php echo $name; ?>! Dein Bild wurde erfolgreich hochgeladen und wird schnellstmöglich durch unsere IT in die Webseite eingearbeitet.</p>
+<p>Danke, <?php echo $user["fullname"]; ?>! Dein Bild wurde erfolgreich hochgeladen und wird schnellstmöglich durch unsere IT in die Webseite eingearbeitet.</p>
 <p>Dein Bild wird wie folgt auf der Webseite aussehen:</p>
 <p><img alt="Dein Bild" src="data:image/jpeg;base64,<?php echo base64_encode($r["image"]); ?>" /></p>
 <p>Nicht zufrieden mit deinem Bild? Dann lade <a href="index.php">hier</a> einfach ein neues hoch und überschriebe somit dein altes.
 Ansonsten kannst du dich wieder ausloggen.</p>
-<form action="<? echo $logoutUrl; ?>">
+<form action="<? echo htmlspecialchars($logoutUrl); ?>" method="POST">
 	<p><br /><input type="submit" value="Logout"></p>
 </form>
 </div>
